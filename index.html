@@ -3,17 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Registro de Figuras Mundial 2026</title>
+    <title>Registro de Figuritas Mundial 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by environment
+        window.FB = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot };
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .animate-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .flag-img { width: 24px; height: 18px; object-fit: cover; border-radius: 2px; border: 1px solid #ddd; }
     </style>
 </head>
 <body class="bg-[#f8f9fa]">
@@ -22,7 +34,20 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // Iconos manuales SVG
+        /**
+         * CONFIGURACIÓN DE FIREBASE
+         * Si usas tu propio proyecto de Firebase en Vercel, rellena estos datos.
+         * Si lo dejas como está, el sistema usará la configuración automática del chat.
+         */
+        const myFirebaseConfig = {
+            apiKey: "PON_AQUI_TU_API_KEY",
+            authDomain: "TU_PROYECTO.firebaseapp.com",
+            projectId: "TU_PROYECTO",
+            storageBucket: "TU_PROYECTO.appspot.com",
+            messagingSenderId: "TU_ID",
+            appId: "TU_APP_ID"
+        };
+
         const Icon = ({ name, className = "w-5 h-5" }) => {
             const icons = {
                 layout: <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>,
@@ -32,7 +57,8 @@
                 copy: <path d="M8 17.92L8 21a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-3.08M16 6V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h3"/>,
                 trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>,
                 check: <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3"/>,
-                minus: <path d="M5 12h14"/>
+                minus: <path d="M5 12h14"/>,
+                cloud: <path d="M17.5 19a5.5 5.5 0 0 0 0-11h-1.22A8 8 0 1 0 3 13c0 3.31 2.69 6 6 6h8.5z"/>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -49,78 +75,18 @@
         };
 
         const GROUPS_DATA = [
-            { id: 'A', name: 'Grupo A', teams: [
-                { name: 'MÉXICO', code: 'MEX', flag: '🇲🇽' }, 
-                { name: 'SUDAFRICA', code: 'RSA', flag: '🇿🇦' }, 
-                { name: 'COREA', code: 'KOR', flag: '🇰🇷' }, 
-                { name: 'REP. CHECA', code: 'CZE', flag: '🇨🇿' }
-            ]},
-            { id: 'B', name: 'Grupo B', teams: [
-                { name: 'CANADÁ', code: 'CAN', flag: '🇨🇦' }, 
-                { name: 'BOSNIA', code: 'BIH', flag: '🇧🇦' }, 
-                { name: 'QATAR', code: 'QAT', flag: '🇶🇦' }, 
-                { name: 'SUIZA', code: 'SUI', flag: '🇨🇭' }
-            ]},
-            { id: 'C', name: 'Grupo C', teams: [
-                { name: 'BRASIL', code: 'BRA', flag: '🇧🇷' }, 
-                { name: 'MARRUECOS', code: 'MAR', flag: '🇲🇦' }, 
-                { name: 'HAITÍ', code: 'HAI', flag: '🇭🇹' }, 
-                { name: 'ESCOCIA', code: 'SCO', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' }
-            ]},
-            { id: 'D', name: 'Grupo D', teams: [
-                { name: 'USA', code: 'USA', flag: '🇺🇸' }, 
-                { name: 'PARAGUAY', code: 'PAR', flag: '🇵🇾' }, 
-                { name: 'AUSTRALIA', code: 'AUS', flag: '🇦🇺' }, 
-                { name: 'TURQUÍA', code: 'TUR', flag: '🇹🇷' }
-            ]},
-            { id: 'E', name: 'Grupo E', teams: [
-                { name: 'ALEMANIA', code: 'GER', flag: '🇩🇪' }, 
-                { name: 'CURAZAO', code: 'CUW', flag: '🇨🇼' }, 
-                { name: 'COSTA DE MARFIL', code: 'CIV', flag: '🇨🇮' }, 
-                { name: 'ECUADOR', code: 'ECU', flag: '🇪🇨' }
-            ]},
-            { id: 'F', name: 'Grupo F', teams: [
-                { name: 'PAÍSES BAJOS', code: 'NED', flag: '🇳🇱' }, 
-                { name: 'JAPÓN', code: 'JPN', flag: '🇯🇵' }, 
-                { name: 'SUECIA', code: 'SWE', flag: '🇸🇪' }, 
-                { name: 'TÚNEZ', code: 'TUN', flag: '🇹🇳' }
-            ]},
-            { id: 'G', name: 'Grupo G', teams: [
-                { name: 'BÉLGICA', code: 'BEL', flag: '🇧🇪' }, 
-                { name: 'EGIPTO', code: 'EGY', flag: '🇪🇬' }, 
-                { name: 'IRÁN', code: 'IRN', flag: '🇮🇷' }, 
-                { name: 'NUEVA ZELANDA', code: 'NZL', flag: '🇳🇿' }
-            ]},
-            { id: 'H', name: 'Grupo H', teams: [
-                { name: 'ESPAÑA', code: 'ESP', flag: '🇪🇸' }, 
-                { name: 'CABO VERDE', code: 'CPV', flag: '🇨🇻' }, 
-                { name: 'A. SAUDITA', code: 'KSA', flag: '🇸🇦' }, 
-                { name: 'URUGUAY', code: 'URU', flag: '🇺🇾' }
-            ]},
-            { id: 'I', name: 'Grupo I', teams: [
-                { name: 'FRANCIA', code: 'FRA', flag: '🇫🇷' }, 
-                { name: 'SENEGAL', code: 'SEN', flag: '🇸🇳' }, 
-                { name: 'IRAK', code: 'IRQ', flag: '🇮🇶' }, 
-                { name: 'NORUEGA', code: 'NOR', flag: '🇳🇴' }
-            ]},
-            { id: 'J', name: 'Grupo J', teams: [
-                { name: 'ARGENTINA', code: 'ARG', flag: '🇦🇷' }, 
-                { name: 'ARGELIA', code: 'ALG', flag: '🇩🇿' }, 
-                { name: 'AUSTRIA', code: 'AUT', flag: '🇦🇹' }, 
-                { name: 'JORDANIA', code: 'JOR', flag: '🇯🇴' }
-            ]},
-            { id: 'K', name: 'Grupo K', teams: [
-                { name: 'PORTUGAL', code: 'POR', flag: '🇵🇹' }, 
-                { name: 'CONGO DR', code: 'COD', flag: '🇨🇩' }, 
-                { name: 'UZBEKISTÁN', code: 'UZB', flag: '🇺🇿' }, 
-                { name: 'COLOMBIA', code: 'COL', flag: '🇨🇴' }
-            ]},
-            { id: 'L', name: 'Grupo L', teams: [
-                { name: 'INGLATERRA', code: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, 
-                { name: 'CROACIA', code: 'CRO', flag: '🇭🇷' }, 
-                { name: 'GHANA', code: 'GHA', flag: '🇬🇭' }, 
-                { name: 'PANAMÁ', code: 'PAN', flag: '🇵🇦' }
-            ]}
+            { id: 'A', name: 'Grupo A', teams: [{ name: 'MÉXICO', code: 'MEX', flag: 'mx' }, { name: 'SUDAFRICA', code: 'RSA', flag: 'za' }, { name: 'COREA', code: 'KOR', flag: 'kr' }, { name: 'REP. CHECA', code: 'CZE', flag: 'cz' }]},
+            { id: 'B', name: 'Grupo B', teams: [{ name: 'CANADÁ', code: 'CAN', flag: 'ca' }, { name: 'BOSNIA', code: 'BIH', flag: 'ba' }, { name: 'QATAR', code: 'QAT', flag: 'qa' }, { name: 'SUIZA', code: 'SUI', flag: 'ch' }]},
+            { id: 'C', name: 'Grupo C', teams: [{ name: 'BRASIL', code: 'BRA', flag: 'br' }, { name: 'MARRUECOS', code: 'MAR', flag: 'ma' }, { name: 'HAITÍ', code: 'HAI', flag: 'ht' }, { name: 'ESCOCIA', code: 'gb-sct', flag: 'gb-sct' }]},
+            { id: 'D', name: 'Grupo D', teams: [{ name: 'USA', code: 'USA', flag: 'us' }, { name: 'PARAGUAY', code: 'PAR', flag: 'py' }, { name: 'AUSTRALIA', code: 'AUS', flag: 'au' }, { name: 'TURQUÍA', code: 'TUR', flag: 'tr' }]},
+            { id: 'E', name: 'Grupo E', teams: [{ name: 'ALEMANIA', code: 'GER', flag: 'de' }, { name: 'CURAZAO', code: 'CUW', flag: 'cw' }, { name: 'COSTA DE MARFIL', code: 'CIV', flag: 'ci' }, { name: 'ECUADOR', code: 'ECU', flag: 'ec' }]},
+            { id: 'F', name: 'Grupo F', teams: [{ name: 'PAÍSES BAJOS', code: 'NED', flag: 'nl' }, { name: 'JAPÓN', code: 'JPN', flag: 'jp' }, { name: 'SUECIA', code: 'SWE', flag: 'se' }, { name: 'TÚNEZ', code: 'TUN', flag: 'tn' }]},
+            { id: 'G', name: 'Grupo G', teams: [{ name: 'BÉLGICA', code: 'BEL', flag: 'be' }, { name: 'EGIPTO', code: 'EGY', flag: 'eg' }, { name: 'IRÁN', code: 'IRN', flag: 'ir' }, { name: 'NUEVA ZELANDA', code: 'NZL', flag: 'nz' }]},
+            { id: 'H', name: 'Grupo H', teams: [{ name: 'ESPAÑA', code: 'ESP', flag: 'es' }, { name: 'CABO VERDE', code: 'CPV', flag: 'cv' }, { name: 'A. SAUDITA', code: 'KSA', flag: 'sa' }, { name: 'URUGUAY', code: 'URU', flag: 'uy' }]},
+            { id: 'I', name: 'Grupo I', teams: [{ name: 'FRANCIA', code: 'FRA', flag: 'fr' }, { name: 'SENEGAL', code: 'SEN', flag: 'sn' }, { name: 'IRAK', code: 'IRQ', flag: 'iq' }, { name: 'NORUEGA', code: 'NOR', flag: 'no' }]},
+            { id: 'J', name: 'Grupo J', teams: [{ name: 'ARGENTINA', code: 'ARG', flag: 'ar' }, { name: 'ARGELIA', code: 'ALG', flag: 'dz' }, { name: 'AUSTRIA', code: 'AUT', flag: 'at' }, { name: 'JORDANIA', code: 'JOR', flag: 'jo' }]},
+            { id: 'K', name: 'Grupo K', teams: [{ name: 'PORTUGAL', code: 'POR', flag: 'pt' }, { name: 'CONGO DR', code: 'COD', flag: 'cd' }, { name: 'UZBEKISTÁN', code: 'UZB', flag: 'uz' }, { name: 'COLOMBIA', code: 'COL', flag: 'co' }]},
+            { id: 'L', name: 'Grupo L', teams: [{ name: 'INGLATERRA', code: 'ENG', flag: 'gb-eng' }, { name: 'CROACIA', code: 'CRO', flag: 'hr' }, { name: 'GHANA', code: 'GHA', flag: 'gh' }, { name: 'PANAMÁ', code: 'PAN', flag: 'pa' }]}
         ];
 
         const SPECIAL_SECTIONS = [
@@ -129,26 +95,90 @@
         ];
 
         function App() {
-            const [stickers, setStickers] = useState(() => {
-                const saved = localStorage.getItem('panini-2026-v1');
-                return saved ? JSON.parse(saved) : {};
-            });
+            const [stickers, setStickers] = useState({});
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
             const [view, setView] = useState('groups'); 
             const [selectedItem, setSelectedItem] = useState(null);
             const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-            useEffect(() => {
-                localStorage.setItem('panini-2026-v1', JSON.stringify(stickers));
-            }, [stickers]);
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'panini-2026-pro';
 
-            const toggleSticker = (category, number, delta) => {
+            useEffect(() => {
+                if (!window.FB) return;
+                const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } = window.FB;
+                
+                // Prioridad: 1. Variable de entorno del chat | 2. Tu configuración manual
+                let config = myFirebaseConfig;
+                try {
+                    if (typeof __firebase_config !== 'undefined') {
+                        config = JSON.parse(__firebase_config);
+                    }
+                } catch(e) {}
+
+                // Si no hay API Key válida, no intentamos conectar para evitar errores en blanco
+                if (!config || config.apiKey === "PON_AQUI_TU_API_KEY") {
+                    console.warn("Usando almacenamiento local temporal. Configura Firebase para guardado permanente.");
+                    setLoading(false);
+                    return;
+                }
+
+                const app = initializeApp(config);
+                const auth = getAuth(app);
+
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch(e) { console.error("Auth error", e); }
+                };
+                initAuth();
+
+                const unsubscribe = onAuthStateChanged(auth, (usr) => {
+                    setUser(usr);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user || !window.FB) return;
+                const { getFirestore, doc, onSnapshot } = window.FB;
+                const db = getFirestore();
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'stickers', 'main');
+                
+                const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setStickers(docSnap.data().collection || {});
+                    }
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Firestore error", error);
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [user]);
+
+            const toggleSticker = async (category, number, delta) => {
                 const key = `${category}-${number}`;
                 const current = stickers[key] || 0;
                 const newValue = Math.max(0, current + delta);
-                
                 const newCollection = { ...stickers, [key]: newValue };
                 if (newValue === 0) delete newCollection[key];
+                
                 setStickers(newCollection);
+
+                if (user && window.FB) {
+                    const { getFirestore, doc, setDoc } = window.FB;
+                    const db = getFirestore();
+                    try {
+                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'stickers', 'main');
+                        await setDoc(docRef, { collection: newCollection });
+                    } catch (e) { console.error("Save error", e); }
+                }
             };
 
             const stats = useMemo(() => {
@@ -180,45 +210,41 @@
                 <div className="min-h-screen bg-[#f8f9fa] text-slate-900 pb-32">
                     <header className="sticky top-0 z-40 bg-[#fedd00] shadow-md border-b-2 border-black">
                         <div className="p-3 flex items-center justify-between max-w-xl mx-auto">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-3">
                                 {view !== 'groups' && (
-                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full mr-1 active:scale-90 transition-transform">
+                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full active:scale-90 transition-transform">
                                         <Icon name="arrowLeft" className="w-5 h-5 text-black" />
                                     </button>
                                 )}
-                                <div className="bg-white p-1 rounded-lg border-2 border-black shadow-sm h-14 w-14 flex items-center justify-center overflow-hidden">
-                                    <img 
-                                        src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/FIFA_World_Cup_2026_Logo.svg/512px-FIFA_World_Cup_2026_Logo.svg.png" 
-                                        className="h-full w-full object-contain p-1" 
-                                        alt="FIFA 26"
-                                        onError={(e) => { e.target.style.display = 'none'; }}
-                                    />
-                                </div>
                                 <div>
-                                    <h1 className="font-black text-black leading-none text-base uppercase italic tracking-tighter">REGISTRO DE FIGURAS</h1>
-                                    <p className="text-[9px] font-bold text-black/60 uppercase">MUNDIAL 2026</p>
+                                    <h1 className="font-black text-black leading-none text-lg uppercase italic tracking-tighter">REGISTRO DE FIGURITAS</h1>
+                                    <p className="text-[10px] font-bold text-black uppercase leading-tight">MUNDIAL 2026</p>
+                                    <p className="text-[9px] font-bold text-black/60 uppercase tracking-[0.2em]">EDICIÓN PANINI</p>
                                 </div>
                             </div>
-                            <div className="bg-black text-[#fedd00] px-3 py-1 rounded-lg font-black text-lg italic shadow-md">
-                                {stats.percent}%
+                            <div className="flex items-center gap-2">
+                                {user && <Icon name="cloud" className="w-4 h-4 text-green-700" />}
+                                <div className="bg-black text-[#fedd00] px-3 py-1 rounded-lg font-black text-lg italic shadow-md">
+                                    {stats.percent}%
+                                </div>
                             </div>
                         </div>
 
                         <div className="bg-white border-y border-black/10 px-4 py-2 grid grid-cols-4 divide-x divide-gray-100 max-w-xl mx-auto text-center">
                             <div>
-                                <span className="text-[8px] font-black text-gray-400 uppercase block">Total</span>
+                                <span className="text-[8px] font-black text-gray-400 uppercase block leading-tight">Total</span>
                                 <span className="font-black text-sm text-gray-700">{stats.totalPossible}</span>
                             </div>
                             <div>
-                                <span className="text-[8px] font-black text-green-600 uppercase block">Tengo</span>
+                                <span className="text-[8px] font-black text-green-600 uppercase block leading-tight">Tengo</span>
                                 <span className="font-black text-sm text-green-700">{stats.owned}</span>
                             </div>
                             <div>
-                                <span className="text-[8px] font-black text-red-600 uppercase block">Faltan</span>
+                                <span className="text-[8px] font-black text-red-600 uppercase block leading-tight">Faltan</span>
                                 <span className="font-black text-sm text-red-700">{stats.remaining}</span>
                             </div>
                             <div>
-                                <span className="text-[8px] font-black text-blue-600 uppercase block">Repes</span>
+                                <span className="text-[8px] font-black text-blue-600 uppercase block leading-tight">Repes</span>
                                 <span className="font-black text-sm text-blue-700">{duplicates.reduce((a,b) => a+b.extra, 0)}</span>
                             </div>
                         </div>
@@ -230,7 +256,7 @@
                                 <div className="bg-[#121212] text-white py-1.5 px-6 font-black italic text-xs tracking-widest uppercase mb-1 shadow-sm">ESPECIALES</div>
                                 <div className="px-4 mb-6 space-y-1.5">
                                     {SPECIAL_SECTIONS.map(section => {
-                                        const owned = Object.keys(stickers).filter(k => k.startsWith(`${section.id}-`)).length;
+                                        const ownedCount = Object.keys(stickers).filter(k => k.startsWith(`${section.id}-`)).length;
                                         return (
                                             <button key={section.id} onClick={() => { setSelectedItem({...section, type: 'special'}); setView('detail'); }} className="w-full bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between active:bg-gray-50 transition-colors">
                                                 <div className="flex items-center gap-3">
@@ -238,9 +264,9 @@
                                                     <h3 className="font-black text-gray-800 text-xs uppercase italic">{section.name}</h3>
                                                 </div>
                                                 <div className="flex flex-col items-end">
-                                                    <span className="text-[10px] font-black text-gray-600">{owned}/{section.count}</span>
+                                                    <span className="text-[10px] font-black text-gray-600">{ownedCount}/{section.count}</span>
                                                     <div className="w-16 h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                                                        <div className="h-full bg-[#121212]" style={{ width: `${(owned/section.count)*100}%` }}></div>
+                                                        <div className="h-full bg-[#121212]" style={{ width: `${(ownedCount/section.count)*100}%` }}></div>
                                                     </div>
                                                 </div>
                                             </button>
@@ -257,17 +283,17 @@
                                             </div>
                                             <div className="divide-y divide-gray-50">
                                                 {group.teams.map(team => {
-                                                    const owned = Object.keys(stickers).filter(k => k.startsWith(`${team.name}-`)).length;
+                                                    const teamOwned = Object.keys(stickers).filter(k => k.startsWith(`${team.name}-`)).length;
                                                     return (
                                                         <button key={team.name} onClick={() => { setSelectedItem({...team, type: 'team', count: 20}); setView('detail'); }} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 text-left active:bg-gray-100 transition-colors">
                                                             <div className="flex items-center gap-3">
-                                                                <span className="text-xl">{team.flag}</span>
+                                                                <img src={`https://flagcdn.com/w40/${team.flag}.png`} className="flag-img" alt={team.name} />
                                                                 <span className="font-black text-gray-800 uppercase italic text-sm">{team.name}</span>
                                                             </div>
                                                             <div className="flex items-center gap-3">
-                                                                <span className="font-black text-[10px] text-gray-400 block">{owned}/20</span>
+                                                                <span className="font-black text-[10px] text-gray-400 block">{teamOwned}/20</span>
                                                                 <div className="w-16 h-1 bg-gray-100 rounded-full mt-0.5 overflow-hidden">
-                                                                    <div className="h-full" style={{ width: `${(owned/20)*100}%`, backgroundColor: GROUP_CONFIG[group.id].color }}></div>
+                                                                    <div className="h-full" style={{ width: `${(teamOwned/20)*100}%`, backgroundColor: GROUP_CONFIG[group.id].color }}></div>
                                                                 </div>
                                                             </div>
                                                         </button>
@@ -284,7 +310,9 @@
                             <div className="animate-in p-4">
                                 <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 mb-5 text-center relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: selectedItem.type === 'team' ? GROUP_CONFIG[GROUPS_DATA.find(g => g.teams.some(t => t.name === selectedItem.name))?.id || 'A'].color : '#121212' }}></div>
-                                    {(selectedItem.flag || selectedItem.icon) && <div className="text-5xl mb-2">{selectedItem.flag || selectedItem.icon}</div>}
+                                    <div className="flex justify-center mb-2">
+                                        {selectedItem.flag ? <img src={`https://flagcdn.com/w160/${selectedItem.flag}.png`} className="h-12 border rounded shadow-sm" alt={selectedItem.name} /> : <span className="text-5xl">{selectedItem.icon}</span>}
+                                    </div>
                                     <h2 className="text-2xl font-black text-gray-900 uppercase italic tracking-tighter leading-none">{selectedItem.name}</h2>
                                     <div className="h-1 w-12 bg-green-600 mx-auto mt-4 rounded-full"></div>
                                 </div>
@@ -323,9 +351,7 @@
                                     <h2 className="text-2xl font-black text-gray-900 uppercase italic flex items-center justify-center gap-3"><Icon name="copy" className="text-blue-500" /> MIS REPETIDAS</h2>
                                     <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-widest">Total de láminas extras: {duplicates.reduce((a,b) => a+b.extra, 0)}</p>
                                 </div>
-                                {duplicates.length === 0 ? (
-                                    <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-gray-100 text-gray-300 font-black uppercase text-[10px]">No tienes repetidas para cambiar</div>
-                                ) : (
+                                {duplicates.length === 0 ? <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-gray-100 text-gray-300 font-black uppercase text-[10px]">No tienes repetidas</div> : (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         {duplicates.map(dup => (
                                             <div key={dup.id} className="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center shadow-sm">
@@ -360,28 +386,26 @@
                                     <button onClick={() => setIsMenuOpen(false)} className="p-1.5 bg-gray-50 rounded-full text-gray-400 active:scale-90 transition-transform"><Icon name="x"/></button>
                                 </div>
                                 <div className="space-y-4">
-                                    <button 
-                                        onClick={() => {
+                                    <button onClick={() => {
                                             const text = duplicates.map(d => `${d.display} (x${d.extra})`).join(', ');
-                                            if (text) {
-                                                navigator.clipboard.writeText(`Mis repetidas Mundial 2026: ${text}`);
-                                                alert("¡Lista copiada al portapapeles!");
-                                            } else {
-                                                alert("No tienes repetidas para compartir.");
-                                            }
-                                        }}
-                                        className="w-full flex items-center justify-between p-4 rounded-xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] border border-blue-100"
-                                    >
+                                            if (text) { navigator.clipboard.writeText(`Mis repetidas 2026: ${text}`); alert("¡Lista copiada!"); }
+                                        }} className="w-full flex items-center justify-between p-4 rounded-xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] border border-blue-100">
                                         Copiar Mis Repes <Icon name="copy" className="w-4 h-4" />
                                     </button>
-                                    
-                                    <button onClick={() => { if(window.confirm("¿Borrar todo el progreso?")) { setStickers({}); setIsMenuOpen(false); } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-red-50 text-red-600 font-black uppercase text-[10px] border border-red-100 active:bg-red-100 transition-colors">
+                                    <button onClick={() => { if(window.confirm("¿Borrar todo el progreso?")) { 
+                                        if (user && window.FB) {
+                                            const { getFirestore, doc, setDoc } = window.FB;
+                                            setStickers({}); 
+                                            const db = getFirestore();
+                                            const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'stickers', 'main');
+                                            setDoc(docRef, { collection: {} });
+                                        }
+                                        setIsMenuOpen(false); 
+                                    } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-red-50 text-red-600 font-black uppercase text-[10px] border border-red-100 active:bg-red-100 transition-colors">
                                         Borrar Datos <Icon name="trash" className="w-4 h-4" />
                                     </button>
                                 </div>
-                                <div className="mt-auto text-center">
-                                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">v2.5 PANINI TRACKER</p>
-                                </div>
+                                <div className="mt-auto text-center font-mono text-[8px] text-gray-300">USER ID: {user?.uid}</div>
                             </div>
                         </div>
                     )}
