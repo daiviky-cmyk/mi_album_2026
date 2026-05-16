@@ -73,7 +73,7 @@
         const GROUPS_DATA = [
             { id: 'A', name: 'Grupo A', teams: [{ name: 'MÉXICO', code: 'MEX', flag: 'mx' }, { name: 'SUDAFRICA', code: 'RSA', flag: 'za' }, { name: 'COREA', code: 'KOR', flag: 'kr' }, { name: 'REP. CHECA', code: 'CZE', flag: 'cz' }]},
             { id: 'B', name: 'Grupo B', teams: [{ name: 'CANADÁ', code: 'CAN', flag: 'ca' }, { name: 'BOSNIA', code: 'BIH', flag: 'ba' }, { name: 'QATAR', code: 'QAT', flag: 'qa' }, { name: 'SUIZA', code: 'SUI', flag: 'ch' }]},
-            { id: 'C', name: 'Grupo C', teams: [{ name: 'BRASIL', code: 'BRA', flag: 'br' }, { name: 'MARRUECOS', code: 'MAR', flag: 'ma' }, { name: 'HAITÍ', code: 'HAI', flag: 'ht' }, { name: 'ESCOCIA', code: 'gb-sct', flag: 'gb-sct' }]},
+            { id: 'C', name: 'Grupo C', teams: [{ name: 'BRASIL', code: 'BRA', flag: 'br' }, { name: 'MARRUECOS', code: 'MAR', flag: 'ma' }, { name: 'HAITÍ', code: 'HAI', flag: 'ht' }, { name: 'ESCOCIA', code: 'SCO', flag: 'gb-sct' }]},
             { id: 'D', name: 'Grupo D', teams: [{ name: 'USA', code: 'USA', flag: 'us' }, { name: 'PARAGUAY', code: 'PAR', flag: 'py' }, { name: 'AUSTRALIA', code: 'AUS', flag: 'au' }, { name: 'TURQUÍA', code: 'TUR', flag: 'tr' }]},
             { id: 'E', name: 'Grupo E', teams: [{ name: 'ALEMANIA', code: 'GER', flag: 'de' }, { name: 'CURAZAO', code: 'CUW', flag: 'cw' }, { name: 'COSTA DE MARFIL', code: 'CIV', flag: 'ci' }, { name: 'ECUADOR', code: 'ECU', flag: 'ec' }]},
             { id: 'F', name: 'Grupo F', teams: [{ name: 'PAÍSES BAJOS', code: 'NED', flag: 'nl' }, { name: 'JAPÓN', code: 'JPN', flag: 'jp' }, { name: 'SUECIA', code: 'SWE', flag: 'se' }, { name: 'TÚNEZ', code: 'TUN', flag: 'tn' }]},
@@ -90,11 +90,9 @@
             { id: 'CC', name: 'COCA-COLA', code: 'CC', count: 14, startAt: 1, icon: '🥤' }
         ];
 
-        // Función auxiliar para copiar al portapapeles compatible con entornos bloqueados
         const fallbackCopyToClipboard = (text) => {
             const textArea = document.createElement("textarea");
             textArea.value = text;
-            // Aseguramos que no se vea en pantalla pero que sea seleccionable
             textArea.style.position = "fixed";
             textArea.style.left = "-9999px";
             textArea.style.top = "0";
@@ -123,7 +121,6 @@
 
             const appId = firebaseConfig.projectId;
 
-            // 1. Inicializar Firebase Auth
             useEffect(() => {
                 if (!window.FB) return;
                 const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged } = window.FB;
@@ -143,7 +140,6 @@
                 return () => unsubscribe();
             }, []);
 
-            // 2. Sincronizar Álbum Compartido
             useEffect(() => {
                 if (!user || !window.FB) return;
                 const { getFirestore, doc, onSnapshot } = window.FB;
@@ -459,7 +455,6 @@
                         <button onClick={() => setIsMenuOpen(true)} className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl text-gray-400`}><Icon name="menu" /><span className="text-[8px] font-black uppercase tracking-tighter">Opciones</span></button>
                     </nav>
 
-                    {/* MENÚ DE OPCIONES RESTAURADO */}
                     {isMenuOpen && (
                         <div className="fixed inset-0 z-50 flex justify-end">
                             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setIsMenuOpen(false)}></div>
