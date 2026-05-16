@@ -3,20 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Registro de Figuritas Mundial 2026</title>
+    <title>Álbum Panini 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Firebase Scripts -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global variables provided by environment
-        window.FB = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot };
+        window.FB = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot };
     </script>
 
     <style>
@@ -34,18 +32,14 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        /**
-         * CONFIGURACIÓN DE FIREBASE
-         * Si usas tu propio proyecto de Firebase en Vercel, rellena estos datos.
-         * Si lo dejas como está, el sistema usará la configuración automática del chat.
-         */
-        const myFirebaseConfig = {
-            apiKey: "PON_AQUI_TU_API_KEY",
-            authDomain: "TU_PROYECTO.firebaseapp.com",
-            projectId: "TU_PROYECTO",
-            storageBucket: "TU_PROYECTO.appspot.com",
-            messagingSenderId: "TU_ID",
-            appId: "TU_APP_ID"
+        // Credenciales vinculadas
+        const firebaseConfig = {
+            apiKey: "AIzaSyDP04Gm702IWFZno2bthXS5hsoUA6s6Q-s",
+            authDomain: "mi-album-2026-c37a6.firebaseapp.com",
+            projectId: "mi-album-2026-c37a6",
+            storageBucket: "mi-album-2026-c37a6.firebasestorage.app",
+            messagingSenderId: "456105887542",
+            appId: "1:456105887542:web:9de2d4959c17da530ad597"
         };
 
         const Icon = ({ name, className = "w-5 h-5" }) => {
@@ -58,7 +52,8 @@
                 trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>,
                 check: <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3"/>,
                 minus: <path d="M5 12h14"/>,
-                cloud: <path d="M17.5 19a5.5 5.5 0 0 0 0-11h-1.22A8 8 0 1 0 3 13c0 3.31 2.69 6 6 6h8.5z"/>
+                cloud: <path d="M17.5 19a5.5 5.5 0 0 0 0-11h-1.22A8 8 0 1 0 3 13c0 3.31 2.69 6 6 6h8.5z"/>,
+                cloudOff: <path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5l14 14M11.35 15.35A5 5 0 0 0 9 19h8.5a5 5 0 0 0 2.22-4.73"/>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -101,83 +96,84 @@
             const [view, setView] = useState('groups'); 
             const [selectedItem, setSelectedItem] = useState(null);
             const [isMenuOpen, setIsMenuOpen] = useState(false);
+            const [syncError, setSyncError] = useState(null);
 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'panini-2026-pro';
+            const appId = firebaseConfig.projectId;
 
+            // 1. Inicializar Auth
             useEffect(() => {
                 if (!window.FB) return;
-                const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } = window.FB;
+                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged } = window.FB;
                 
-                // Prioridad: 1. Variable de entorno del chat | 2. Tu configuración manual
-                let config = myFirebaseConfig;
                 try {
-                    if (typeof __firebase_config !== 'undefined') {
-                        config = JSON.parse(__firebase_config);
-                    }
-                } catch(e) {}
+                    const app = initializeApp(firebaseConfig);
+                    const auth = getAuth(app);
 
-                // Si no hay API Key válida, no intentamos conectar para evitar errores en blanco
-                if (!config || config.apiKey === "PON_AQUI_TU_API_KEY") {
-                    console.warn("Usando almacenamiento local temporal. Configura Firebase para guardado permanente.");
+                    signInAnonymously(auth).catch(e => {
+                        console.error("Auth Error:", e);
+                        setSyncError("Error de autenticación anónima.");
+                    });
+
+                    const unsubscribe = onAuthStateChanged(auth, (usr) => {
+                        setUser(usr);
+                        if (!usr) setLoading(false);
+                    });
+                    return () => unsubscribe();
+                } catch(e) {
+                    console.error("Firebase Init Error:", e);
+                    setSyncError("Error al iniciar Firebase.");
                     setLoading(false);
-                    return;
                 }
-
-                const app = initializeApp(config);
-                const auth = getAuth(app);
-
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch(e) { console.error("Auth error", e); }
-                };
-                initAuth();
-
-                const unsubscribe = onAuthStateChanged(auth, (usr) => {
-                    setUser(usr);
-                });
-                return () => unsubscribe();
             }, []);
 
+            // 2. Sincronizar Firestore con ruta garantizada
             useEffect(() => {
                 if (!user || !window.FB) return;
                 const { getFirestore, doc, onSnapshot } = window.FB;
                 const db = getFirestore();
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'stickers', 'main');
+                
+                // Ruta de 6 segmentos: artifacts / ID / users / UID / userData / stickers
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'userData', 'stickers');
                 
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         setStickers(docSnap.data().collection || {});
                     }
                     setLoading(false);
+                    setSyncError(null);
                 }, (error) => {
-                    console.error("Firestore error", error);
+                    console.error("Firestore Snapshot Error:", error);
+                    if (error.code === 'permission-denied') {
+                        setSyncError("Faltan permisos. Revisa la pestaña 'Rules' en tu Firebase Console.");
+                    } else {
+                        setSyncError("Error al sincronizar datos.");
+                    }
                     setLoading(false);
                 });
 
                 return () => unsubscribe();
-            }, [user]);
+            }, [user, appId]);
 
             const toggleSticker = async (category, number, delta) => {
                 const key = `${category}-${number}`;
                 const current = stickers[key] || 0;
                 const newValue = Math.max(0, current + delta);
                 const newCollection = { ...stickers, [key]: newValue };
+                
                 if (newValue === 0) delete newCollection[key];
                 
+                // Actualizar localmente primero para que sea instantáneo
                 setStickers(newCollection);
 
                 if (user && window.FB) {
                     const { getFirestore, doc, setDoc } = window.FB;
                     const db = getFirestore();
                     try {
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'stickers', 'main');
-                        await setDoc(docRef, { collection: newCollection });
-                    } catch (e) { console.error("Save error", e); }
+                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'userData', 'stickers');
+                        await setDoc(docRef, { collection: newCollection }, { merge: true });
+                    } catch (e) {
+                        console.error("Error Guardando:", e);
+                    }
                 }
             };
 
@@ -206,14 +202,23 @@
                     });
             }, [stickers]);
 
+            if (loading && !user) {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center bg-[#fedd00]">
+                        <div className="text-6xl animate-bounce mb-6">⚽</div>
+                        <div className="font-black italic uppercase text-black tracking-tighter">Conectando con la nube...</div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="min-h-screen bg-[#f8f9fa] text-slate-900 pb-32">
                     <header className="sticky top-0 z-40 bg-[#fedd00] shadow-md border-b-2 border-black">
                         <div className="p-3 flex items-center justify-between max-w-xl mx-auto">
                             <div className="flex items-center gap-3">
                                 {view !== 'groups' && (
-                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full active:scale-90 transition-transform">
-                                        <Icon name="arrowLeft" className="w-5 h-5 text-black" />
+                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full active:scale-75 transition-transform">
+                                        <Icon name="arrowLeft" className="text-black" />
                                     </button>
                                 )}
                                 <div>
@@ -223,30 +228,24 @@
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                {user && <Icon name="cloud" className="w-4 h-4 text-green-700" />}
+                                {!syncError ? <Icon name="cloud" className="text-green-700 w-4 h-4" /> : <Icon name="cloudOff" className="text-red-600 w-4 h-4" />}
                                 <div className="bg-black text-[#fedd00] px-3 py-1 rounded-lg font-black text-lg italic shadow-md">
                                     {stats.percent}%
                                 </div>
                             </div>
                         </div>
 
+                        {syncError && (
+                            <div className="bg-red-600 text-white text-[10px] py-1 text-center font-bold px-4">
+                                {syncError}
+                            </div>
+                        )}
+
                         <div className="bg-white border-y border-black/10 px-4 py-2 grid grid-cols-4 divide-x divide-gray-100 max-w-xl mx-auto text-center">
-                            <div>
-                                <span className="text-[8px] font-black text-gray-400 uppercase block leading-tight">Total</span>
-                                <span className="font-black text-sm text-gray-700">{stats.totalPossible}</span>
-                            </div>
-                            <div>
-                                <span className="text-[8px] font-black text-green-600 uppercase block leading-tight">Tengo</span>
-                                <span className="font-black text-sm text-green-700">{stats.owned}</span>
-                            </div>
-                            <div>
-                                <span className="text-[8px] font-black text-red-600 uppercase block leading-tight">Faltan</span>
-                                <span className="font-black text-sm text-red-700">{stats.remaining}</span>
-                            </div>
-                            <div>
-                                <span className="text-[8px] font-black text-blue-600 uppercase block leading-tight">Repes</span>
-                                <span className="font-black text-sm text-blue-700">{duplicates.reduce((a,b) => a+b.extra, 0)}</span>
-                            </div>
+                            <div><span className="text-[8px] font-black text-gray-400 uppercase block tracking-tighter">Total</span><span className="font-black text-sm text-gray-700">{stats.totalPossible}</span></div>
+                            <div><span className="text-[8px] font-black text-green-600 uppercase block tracking-tighter">Tengo</span><span className="font-black text-sm text-green-700">{stats.owned}</span></div>
+                            <div><span className="text-[8px] font-black text-red-600 uppercase block tracking-tighter">Faltan</span><span className="font-black text-sm text-red-700">{stats.remaining}</span></div>
+                            <div><span className="text-[8px] font-black text-blue-600 uppercase block tracking-tighter">Repes</span><span className="font-black text-sm text-blue-700">{duplicates.reduce((a,b) => a+b.extra, 0)}</span></div>
                         </div>
                     </header>
 
@@ -256,17 +255,14 @@
                                 <div className="bg-[#121212] text-white py-1.5 px-6 font-black italic text-xs tracking-widest uppercase mb-1 shadow-sm">ESPECIALES</div>
                                 <div className="px-4 mb-6 space-y-1.5">
                                     {SPECIAL_SECTIONS.map(section => {
-                                        const ownedCount = Object.keys(stickers).filter(k => k.startsWith(`${section.id}-`)).length;
+                                        const ownedInSec = Object.keys(stickers).filter(k => k.startsWith(`${section.id}-`)).length;
                                         return (
-                                            <button key={section.id} onClick={() => { setSelectedItem({...section, type: 'special'}); setView('detail'); }} className="w-full bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between active:bg-gray-50 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xl">{section.icon}</span>
-                                                    <h3 className="font-black text-gray-800 text-xs uppercase italic">{section.name}</h3>
-                                                </div>
+                                            <button key={section.id} onClick={() => { setSelectedItem({...section, type: 'special'}); setView('detail'); }} className="w-full bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between shadow-sm active:bg-gray-50 transition-colors">
+                                                <div className="flex items-center gap-3"><span className="text-xl">{section.icon}</span><h3 className="font-black text-gray-800 text-xs uppercase italic">{section.name}</h3></div>
                                                 <div className="flex flex-col items-end">
-                                                    <span className="text-[10px] font-black text-gray-600">{ownedCount}/{section.count}</span>
+                                                    <span className="text-[10px] font-black text-gray-600">{ownedInSec}/{section.count}</span>
                                                     <div className="w-16 h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                                                        <div className="h-full bg-[#121212]" style={{ width: `${(ownedCount/section.count)*100}%` }}></div>
+                                                        <div className="h-full bg-[#121212]" style={{ width: `${(ownedInSec/section.count)*100}%` }}></div>
                                                     </div>
                                                 </div>
                                             </button>
@@ -278,20 +274,15 @@
                                 <div className="px-4 space-y-4">
                                     {GROUPS_DATA.map(group => (
                                         <div key={group.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                            <div className="px-4 py-1.5 flex justify-between items-center text-white" style={{ backgroundColor: GROUP_CONFIG[group.id].color }}>
-                                                <h3 className="font-black italic uppercase text-[10px] tracking-widest">Grupo {group.id}</h3>
-                                            </div>
+                                            <div className="px-4 py-1.5 flex justify-between items-center text-white font-black italic uppercase text-[10px]" style={{ backgroundColor: GROUP_CONFIG[group.id].color }}>Grupo {group.id}</div>
                                             <div className="divide-y divide-gray-50">
                                                 {group.teams.map(team => {
                                                     const teamOwned = Object.keys(stickers).filter(k => k.startsWith(`${team.name}-`)).length;
                                                     return (
-                                                        <button key={team.name} onClick={() => { setSelectedItem({...team, type: 'team', count: 20}); setView('detail'); }} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 text-left active:bg-gray-100 transition-colors">
+                                                        <button key={team.name} onClick={() => { setSelectedItem({...team, type: 'team', count: 20}); setView('detail'); }} className="w-full flex items-center justify-between p-5 active:bg-gray-50 transition-colors text-left">
+                                                            <div className="flex items-center gap-3"><img src={`https://flagcdn.com/w40/${team.flag}.png`} className="flag-img" alt={team.name} /><span className="font-black text-gray-800 uppercase italic text-sm">{team.name}</span></div>
                                                             <div className="flex items-center gap-3">
-                                                                <img src={`https://flagcdn.com/w40/${team.flag}.png`} className="flag-img" alt={team.name} />
-                                                                <span className="font-black text-gray-800 uppercase italic text-sm">{team.name}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="font-black text-[10px] text-gray-400 block">{teamOwned}/20</span>
+                                                                <span className="font-black text-[10px] text-gray-400">{teamOwned}/20</span>
                                                                 <div className="w-16 h-1 bg-gray-100 rounded-full mt-0.5 overflow-hidden">
                                                                     <div className="h-full" style={{ width: `${(teamOwned/20)*100}%`, backgroundColor: GROUP_CONFIG[group.id].color }}></div>
                                                                 </div>
@@ -310,9 +301,7 @@
                             <div className="animate-in p-4">
                                 <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 mb-5 text-center relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: selectedItem.type === 'team' ? GROUP_CONFIG[GROUPS_DATA.find(g => g.teams.some(t => t.name === selectedItem.name))?.id || 'A'].color : '#121212' }}></div>
-                                    <div className="flex justify-center mb-2">
-                                        {selectedItem.flag ? <img src={`https://flagcdn.com/w160/${selectedItem.flag}.png`} className="h-12 border rounded shadow-sm" alt={selectedItem.name} /> : <span className="text-5xl">{selectedItem.icon}</span>}
-                                    </div>
+                                    <div className="flex justify-center mb-2">{selectedItem.flag ? <img src={`https://flagcdn.com/w160/${selectedItem.flag}.png`} className="h-12 border rounded shadow-sm" alt={selectedItem.name} /> : <span className="text-5xl">{selectedItem.icon}</span>}</div>
                                     <h2 className="text-2xl font-black text-gray-900 uppercase italic tracking-tighter leading-none">{selectedItem.name}</h2>
                                     <div className="h-1 w-12 bg-green-600 mx-auto mt-4 rounded-full"></div>
                                 </div>
@@ -322,21 +311,18 @@
                                         const category = selectedItem.id === 'FWC' ? 'FWC' : (selectedItem.id === 'CC' ? 'CC' : selectedItem.name);
                                         const key = `${category}-${num}`;
                                         const count = stickers[key] || 0;
-                                        const label = `${selectedItem.code} ${num}`;
-                                        const extra = selectedItem.type === 'team' ? (num === 1 ? "ESC" : num === 13 ? "EQU" : null) : null;
+                                        const extra = num === 1 ? "ESC" : num === 13 ? "EQU" : null;
 
                                         return (
                                             <div key={num} className="relative">
                                                 <button onClick={() => toggleSticker(category, num, 1)} className={`w-full aspect-[4/5] rounded-xl border-2 flex flex-col items-center justify-center transition-all active:scale-90 overflow-hidden ${count > 0 ? 'bg-green-600/20 border-green-600 shadow-inner' : 'bg-white border-gray-100 text-gray-300'}`}>
                                                     {count > 0 && <div className="absolute top-1 right-1"><Icon name="check" className="w-3.5 h-3.5 text-green-700" /></div>}
-                                                    <span className={`text-[9px] font-black leading-none ${count > 0 ? 'text-green-900' : 'text-gray-300'}`}>{label}</span>
-                                                    {extra && <span className={`text-[7px] font-black px-1.5 py-0.5 rounded mt-1.5 ${count > 0 ? 'bg-green-700 text-white' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>{extra}</span>}
-                                                    {count > 1 && <div className="absolute bottom-1 right-1"><span className="bg-blue-600 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full border border-white">{count - 1}</span></div>}
+                                                    <span className={`text-[9px] font-black leading-none ${count > 0 ? 'text-green-900' : 'text-gray-300'}`}>{selectedItem.code} {num}</span>
+                                                    {selectedItem.type === 'team' && extra && <span className={`text-[7px] font-black px-1.5 py-0.5 rounded mt-1.5 ${count > 0 ? 'bg-green-700 text-white' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>{extra}</span>}
+                                                    {count > 1 && <div className="absolute bottom-1 right-1"><span className="bg-blue-600 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full border border-white shadow-sm">{count - 1}</span></div>}
                                                 </button>
                                                 {count > 0 && (
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleSticker(category, num, -1); }} className="absolute -top-2 -left-2 w-7 h-7 bg-red-600 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white z-10 active:scale-75 transition-transform">
-                                                        <Icon name="minus" className="w-4 h-4 stroke-[4px]" />
-                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleSticker(category, num, -1); }} className="absolute -top-2 -left-2 w-7 h-7 bg-red-600 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white z-10 active:scale-75 transition-transform"><Icon name="minus" className="w-4 h-4 stroke-[4px]" /></button>
                                                 )}
                                             </div>
                                         );
@@ -347,10 +333,7 @@
 
                         {view === 'duplicates' && (
                             <div className="p-4 animate-in text-center">
-                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-6">
-                                    <h2 className="text-2xl font-black text-gray-900 uppercase italic flex items-center justify-center gap-3"><Icon name="copy" className="text-blue-500" /> MIS REPETIDAS</h2>
-                                    <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-widest">Total de láminas extras: {duplicates.reduce((a,b) => a+b.extra, 0)}</p>
-                                </div>
+                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-6 font-black uppercase italic text-2xl flex items-center justify-center gap-3"><Icon name="copy" className="text-blue-500" /> Mis Repes</div>
                                 {duplicates.length === 0 ? <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-gray-100 text-gray-300 font-black uppercase text-[10px]">No tienes repetidas</div> : (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         {duplicates.map(dup => (
@@ -366,46 +349,21 @@
                     </main>
 
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-2.5 flex justify-around items-center z-40 pb-safe shadow-lg">
-                        <button onClick={() => setView('groups')} className={`flex flex-col items-center gap-1 px-5 py-2 rounded-xl transition-all ${view === 'groups' ? 'text-black bg-[#fedd00]' : 'text-gray-400'}`}>
-                            <Icon name="layout" /><span className="text-[8px] font-black uppercase tracking-tighter">Álbum</span>
-                        </button>
-                        <button onClick={() => setView('duplicates')} className={`flex flex-col items-center gap-1 px-5 py-2 rounded-xl transition-all ${view === 'duplicates' ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}>
-                            <Icon name="copy" /><span className="text-[8px] font-black uppercase tracking-tighter">Cambios</span>
-                        </button>
-                        <button onClick={() => setIsMenuOpen(true)} className="flex flex-col items-center gap-1 px-5 py-2 text-gray-400">
-                            <Icon name="menu" /><span className="text-[8px] font-black uppercase tracking-tighter">Opciones</span>
-                        </button>
+                        <button onClick={() => setView('groups')} className={`flex flex-col items-center gap-1 px-5 py-2 rounded-xl ${view === 'groups' ? 'text-black bg-[#fedd00]' : 'text-gray-400'}`}><Icon name="layout" /><span className="text-[8px] font-black uppercase tracking-tighter text-center">Álbum</span></button>
+                        <button onClick={() => setView('duplicates')} className={`flex flex-col items-center gap-1 px-5 py-2 rounded-xl ${view === 'duplicates' ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}><Icon name="copy" /><span className="text-[8px] font-black uppercase tracking-tighter text-center">Repes</span></button>
+                        <button onClick={() => setIsMenuOpen(true)} className="flex flex-col items-center gap-1 px-5 py-2 text-gray-400"><Icon name="menu" /><span className="text-[8px] font-black uppercase tracking-tighter text-center">Opciones</span></button>
                     </nav>
 
                     {isMenuOpen && (
-                        <div className="fixed inset-0 z-50 transition-all flex justify-end">
+                        <div className="fixed inset-0 z-50 flex justify-end">
                             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setIsMenuOpen(false)}></div>
                             <div className="relative w-72 bg-white shadow-2xl h-full flex flex-col p-6 animate-in">
-                                <div className="flex justify-between items-center mb-10">
-                                    <h2 className="font-black text-xl italic uppercase tracking-tighter">Opciones</h2>
-                                    <button onClick={() => setIsMenuOpen(false)} className="p-1.5 bg-gray-50 rounded-full text-gray-400 active:scale-90 transition-transform"><Icon name="x"/></button>
-                                </div>
+                                <div className="flex justify-between items-center mb-10"><h2 className="font-black text-xl italic uppercase">Opciones</h2><button onClick={() => setIsMenuOpen(false)} className="p-1.5 bg-gray-50 rounded-full text-gray-400 active:scale-75 transition-transform"><Icon name="x"/></button></div>
                                 <div className="space-y-4">
-                                    <button onClick={() => {
-                                            const text = duplicates.map(d => `${d.display} (x${d.extra})`).join(', ');
-                                            if (text) { navigator.clipboard.writeText(`Mis repetidas 2026: ${text}`); alert("¡Lista copiada!"); }
-                                        }} className="w-full flex items-center justify-between p-4 rounded-xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] border border-blue-100">
-                                        Copiar Mis Repes <Icon name="copy" className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => { if(window.confirm("¿Borrar todo el progreso?")) { 
-                                        if (user && window.FB) {
-                                            const { getFirestore, doc, setDoc } = window.FB;
-                                            setStickers({}); 
-                                            const db = getFirestore();
-                                            const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'stickers', 'main');
-                                            setDoc(docRef, { collection: {} });
-                                        }
-                                        setIsMenuOpen(false); 
-                                    } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-red-50 text-red-600 font-black uppercase text-[10px] border border-red-100 active:bg-red-100 transition-colors">
-                                        Borrar Datos <Icon name="trash" className="w-4 h-4" />
-                                    </button>
+                                    <button onClick={() => { const text = duplicates.map(d => `${d.display} (x${d.extra})`).join(', '); if (text) { navigator.clipboard.writeText(`Mis repetidas 2026: ${text}`); alert("¡Copiado!"); } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] border border-blue-100">Copiar Mis Repes <Icon name="copy" /></button>
+                                    <button onClick={() => { if(window.confirm("¿Reiniciar?")) { if (user && window.FB) { const { getFirestore, doc, setDoc } = window.FB; setStickers({}); const db = getFirestore(); const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'userData', 'stickers'); setDoc(docRef, { collection: {} }); } setIsMenuOpen(false); } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-red-50 text-red-600 font-black uppercase text-[10px] border border-red-100">Borrar Todo <Icon name="trash" /></button>
                                 </div>
-                                <div className="mt-auto text-center font-mono text-[8px] text-gray-300">USER ID: {user?.uid}</div>
+                                <div className="mt-auto text-center font-mono text-[8px] text-gray-300 break-all uppercase tracking-tighter">ID: {user?.uid}</div>
                             </div>
                         </div>
                     )}
