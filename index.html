@@ -31,8 +31,9 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
+        // Configuración de Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDP04Gm702IWFZno2bthXS5hsoUA6s6Q-s",
             authDomain: "mi-album-2026-c37a6.firebaseapp.com",
@@ -144,29 +145,36 @@
                 return () => unsubscribe();
             }, [user, appId]);
 
+            // Función de actualización mejorada para evitar bugs de concurrencia
             const toggleSticker = async (category, number, delta) => {
-                const key = `${category}-${number}`;
-                const current = stickers[key] || 0;
-                const newValue = Math.max(0, current + delta);
-                const newCollection = { ...stickers, [key]: newValue };
+                if (!user || !window.FB) return;
                 
-                if (newValue === 0) delete newCollection[key];
-                
-                setStickers(newCollection);
+                const { getFirestore, doc, setDoc } = window.FB;
+                const db = getFirestore();
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'album', 'shared');
 
-                if (user && window.FB) {
-                    setSyncStatus('saving');
-                    const { getFirestore, doc, setDoc } = window.FB;
-                    const db = getFirestore();
-                    try {
-                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'album', 'shared');
-                        await setDoc(docRef, { collection: newCollection }, { merge: true });
-                        setSyncStatus('live');
-                    } catch (e) {
-                        console.error("Save error:", e);
-                        setSyncStatus('error');
+                setSyncStatus('saving');
+
+                // Usamos la versión funcional de setStickers para asegurar el estado más reciente
+                setStickers(prevStickers => {
+                    const key = `${category}-${number}`;
+                    const current = prevStickers[key] || 0;
+                    const newValue = Math.max(0, current + delta);
+                    
+                    const nextStickers = { ...prevStickers };
+                    if (newValue === 0) {
+                        delete nextStickers[key];
+                    } else {
+                        nextStickers[key] = newValue;
                     }
-                }
+
+                    // Sincronizamos con Firebase inmediatamente con el objeto limpio
+                    setDoc(docRef, { collection: nextStickers }, { merge: true })
+                        .then(() => setSyncStatus('live'))
+                        .catch(() => setSyncStatus('error'));
+
+                    return nextStickers;
+                });
             };
 
             const stats = useMemo(() => {
