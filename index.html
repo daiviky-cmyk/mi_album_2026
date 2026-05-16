@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Álbum Panini 2026</title>
+    <title>Álbum Grupal Mundial 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -24,6 +24,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         .flag-img { width: 24px; height: 18px; object-fit: cover; border-radius: 2px; border: 1px solid #ddd; }
+        .sync-badge { font-size: 8px; font-weight: 900; padding: 2px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.05em; }
     </style>
 </head>
 <body class="bg-[#f8f9fa]">
@@ -32,7 +33,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // Credenciales vinculadas
+        // Firebase project configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDP04Gm702IWFZno2bthXS5hsoUA6s6Q-s",
             authDomain: "mi-album-2026-c37a6.firebaseapp.com",
@@ -52,8 +53,9 @@
                 trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>,
                 check: <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3"/>,
                 minus: <path d="M5 12h14"/>,
+                users: <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />,
                 cloud: <path d="M17.5 19a5.5 5.5 0 0 0 0-11h-1.22A8 8 0 1 0 3 13c0 3.31 2.69 6 6 6h8.5z"/>,
-                cloudOff: <path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5l14 14M11.35 15.35A5 5 0 0 0 9 19h8.5a5 5 0 0 0 2.22-4.73"/>
+                loader: <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -93,61 +95,51 @@
             const [stickers, setStickers] = useState({});
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
+            const [syncStatus, setSyncStatus] = useState('syncing'); 
             const [view, setView] = useState('groups'); 
             const [selectedItem, setSelectedItem] = useState(null);
             const [isMenuOpen, setIsMenuOpen] = useState(false);
-            const [syncError, setSyncError] = useState(null);
 
             const appId = firebaseConfig.projectId;
 
-            // 1. Inicializar Auth
+            // 1. Initialize Firebase Auth
             useEffect(() => {
                 if (!window.FB) return;
                 const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged } = window.FB;
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
                 
-                try {
-                    const app = initializeApp(firebaseConfig);
-                    const auth = getAuth(app);
+                const initAuth = async () => {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (e) {
+                        console.error("Auth failed:", e);
+                    }
+                };
+                initAuth();
 
-                    signInAnonymously(auth).catch(e => {
-                        console.error("Auth Error:", e);
-                        setSyncError("Error de autenticación anónima.");
-                    });
-
-                    const unsubscribe = onAuthStateChanged(auth, (usr) => {
-                        setUser(usr);
-                        if (!usr) setLoading(false);
-                    });
-                    return () => unsubscribe();
-                } catch(e) {
-                    console.error("Firebase Init Error:", e);
-                    setSyncError("Error al iniciar Firebase.");
-                    setLoading(false);
-                }
+                const unsubscribe = onAuthStateChanged(auth, setUser);
+                return () => unsubscribe();
             }, []);
 
-            // 2. Sincronizar Firestore con ruta garantizada
+            // 2. Synchronize Shared Album (Corrected 6-segment path)
             useEffect(() => {
                 if (!user || !window.FB) return;
                 const { getFirestore, doc, onSnapshot } = window.FB;
                 const db = getFirestore();
                 
-                // Ruta de 6 segmentos: artifacts / ID / users / UID / userData / stickers
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'userData', 'stickers');
+                // CORRECTED PATH: artifacts/{appId}/public/data/album/shared (6 segments)
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'album', 'shared');
                 
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         setStickers(docSnap.data().collection || {});
                     }
                     setLoading(false);
-                    setSyncError(null);
+                    setSyncStatus('live');
                 }, (error) => {
-                    console.error("Firestore Snapshot Error:", error);
-                    if (error.code === 'permission-denied') {
-                        setSyncError("Faltan permisos. Revisa la pestaña 'Rules' en tu Firebase Console.");
-                    } else {
-                        setSyncError("Error al sincronizar datos.");
-                    }
+                    console.error("Snapshot error:", error);
+                    setSyncStatus('error');
                     setLoading(false);
                 });
 
@@ -162,17 +154,21 @@
                 
                 if (newValue === 0) delete newCollection[key];
                 
-                // Actualizar localmente primero para que sea instantáneo
+                // Optimistic UI update
                 setStickers(newCollection);
 
+                // Save to cloud
                 if (user && window.FB) {
+                    setSyncStatus('saving');
                     const { getFirestore, doc, setDoc } = window.FB;
                     const db = getFirestore();
                     try {
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'userData', 'stickers');
+                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'album', 'shared');
                         await setDoc(docRef, { collection: newCollection }, { merge: true });
+                        setSyncStatus('live');
                     } catch (e) {
-                        console.error("Error Guardando:", e);
+                        console.error("Save error:", e);
+                        setSyncStatus('error');
                     }
                 }
             };
@@ -202,55 +198,50 @@
                     });
             }, [stickers]);
 
-            if (loading && !user) {
-                return (
-                    <div className="h-screen flex flex-col items-center justify-center bg-[#fedd00]">
-                        <div className="text-6xl animate-bounce mb-6">⚽</div>
-                        <div className="font-black italic uppercase text-black tracking-tighter">Conectando con la nube...</div>
-                    </div>
-                );
-            }
-
             return (
                 <div className="min-h-screen bg-[#f8f9fa] text-slate-900 pb-32">
                     <header className="sticky top-0 z-40 bg-[#fedd00] shadow-md border-b-2 border-black">
                         <div className="p-3 flex items-center justify-between max-w-xl mx-auto">
                             <div className="flex items-center gap-3">
                                 {view !== 'groups' && (
-                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full active:scale-75 transition-transform">
+                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full active:scale-90 transition-transform">
                                         <Icon name="arrowLeft" className="text-black" />
                                     </button>
                                 )}
                                 <div>
-                                    <h1 className="font-black text-black leading-none text-lg uppercase italic tracking-tighter">REGISTRO DE FIGURITAS</h1>
-                                    <p className="text-[10px] font-bold text-black uppercase leading-tight">MUNDIAL 2026</p>
-                                    <p className="text-[9px] font-bold text-black/60 uppercase tracking-[0.2em]">EDICIÓN PANINI</p>
+                                    <h1 className="font-black text-black leading-none text-lg uppercase italic tracking-tighter">ÁLBUM GRUPAL</h1>
+                                    <p className="text-[10px] font-bold text-black uppercase leading-tight tracking-widest">COOPERATIVO 2026</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                {!syncError ? <Icon name="cloud" className="text-green-700 w-4 h-4" /> : <Icon name="cloudOff" className="text-red-600 w-4 h-4" />}
-                                <div className="bg-black text-[#fedd00] px-3 py-1 rounded-lg font-black text-lg italic shadow-md">
-                                    {stats.percent}%
+                            <div className="flex flex-col items-end">
+                                <div className="flex items-center gap-2">
+                                    {syncStatus === 'saving' && <div className="sync-badge bg-blue-100 text-blue-600 flex items-center gap-1 animate-pulse"><Icon name="loader" className="w-2 h-2 animate-spin"/> Guardando...</div>}
+                                    {syncStatus === 'live' && <div className="sync-badge bg-green-100 text-green-700 flex items-center gap-1"><Icon name="users" className="w-2 h-2"/> Grupo En Vivo</div>}
+                                    {syncStatus === 'error' && <div className="sync-badge bg-red-100 text-red-600 flex items-center gap-1"><Icon name="x" className="w-2 h-2"/> Error</div>}
+                                    <div className="bg-black text-[#fedd00] px-3 py-1 rounded-lg font-black text-lg italic shadow-md">
+                                        {stats.percent}%
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {syncError && (
-                            <div className="bg-red-600 text-white text-[10px] py-1 text-center font-bold px-4">
-                                {syncError}
-                            </div>
-                        )}
-
                         <div className="bg-white border-y border-black/10 px-4 py-2 grid grid-cols-4 divide-x divide-gray-100 max-w-xl mx-auto text-center">
-                            <div><span className="text-[8px] font-black text-gray-400 uppercase block tracking-tighter">Total</span><span className="font-black text-sm text-gray-700">{stats.totalPossible}</span></div>
-                            <div><span className="text-[8px] font-black text-green-600 uppercase block tracking-tighter">Tengo</span><span className="font-black text-sm text-green-700">{stats.owned}</span></div>
-                            <div><span className="text-[8px] font-black text-red-600 uppercase block tracking-tighter">Faltan</span><span className="font-black text-sm text-red-700">{stats.remaining}</span></div>
-                            <div><span className="text-[8px] font-black text-blue-600 uppercase block tracking-tighter">Repes</span><span className="font-black text-sm text-blue-700">{duplicates.reduce((a,b) => a+b.extra, 0)}</span></div>
+                            <div><span className="text-[8px] font-black text-gray-400 uppercase block tracking-tighter leading-tight">Total</span><span className="font-black text-sm text-gray-700">{stats.totalPossible}</span></div>
+                            <div><span className="text-[8px] font-black text-green-600 uppercase block tracking-tighter leading-tight">Tengo</span><span className="font-black text-sm text-green-700">{stats.owned}</span></div>
+                            <div><span className="text-[8px] font-black text-red-600 uppercase block tracking-tighter leading-tight">Faltan</span><span className="font-black text-sm text-red-700">{stats.remaining}</span></div>
+                            <div><span className="text-[8px] font-black text-blue-600 uppercase block tracking-tighter leading-tight">Repes</span><span className="font-black text-sm text-blue-700">{duplicates.reduce((a,b) => a+b.extra, 0)}</span></div>
                         </div>
                     </header>
 
                     <main className="max-w-xl mx-auto">
-                        {view === 'groups' && (
+                        {loading && (
+                            <div className="p-12 text-center">
+                                <Icon name="loader" className="w-10 h-10 animate-spin mx-auto text-gray-300 mb-4" />
+                                <p className="font-black italic text-gray-400 uppercase text-xs">Uniendo celulares...</p>
+                            </div>
+                        )}
+                        
+                        {!loading && view === 'groups' && (
                             <div className="animate-in">
                                 <div className="bg-[#121212] text-white py-1.5 px-6 font-black italic text-xs tracking-widest uppercase mb-1 shadow-sm">ESPECIALES</div>
                                 <div className="px-4 mb-6 space-y-1.5">
@@ -281,8 +272,8 @@
                                                     return (
                                                         <button key={team.name} onClick={() => { setSelectedItem({...team, type: 'team', count: 20}); setView('detail'); }} className="w-full flex items-center justify-between p-5 active:bg-gray-50 transition-colors text-left">
                                                             <div className="flex items-center gap-3"><img src={`https://flagcdn.com/w40/${team.flag}.png`} className="flag-img" alt={team.name} /><span className="font-black text-gray-800 uppercase italic text-sm">{team.name}</span></div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="font-black text-[10px] text-gray-400">{teamOwned}/20</span>
+                                                            <div className="flex items-center gap-3 text-right">
+                                                                <span className="font-black text-[10px] text-gray-400 block">{teamOwned}/20</span>
                                                                 <div className="w-16 h-1 bg-gray-100 rounded-full mt-0.5 overflow-hidden">
                                                                     <div className="h-full" style={{ width: `${(teamOwned/20)*100}%`, backgroundColor: GROUP_CONFIG[group.id].color }}></div>
                                                                 </div>
@@ -333,8 +324,8 @@
 
                         {view === 'duplicates' && (
                             <div className="p-4 animate-in text-center">
-                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-6 font-black uppercase italic text-2xl flex items-center justify-center gap-3"><Icon name="copy" className="text-blue-500" /> Mis Repes</div>
-                                {duplicates.length === 0 ? <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-gray-100 text-gray-300 font-black uppercase text-[10px]">No tienes repetidas</div> : (
+                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-6 font-black uppercase italic text-2xl flex items-center justify-center gap-3"><Icon name="copy" className="text-blue-500" /> Repetidas del Grupo</div>
+                                {duplicates.length === 0 ? <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-gray-100 text-gray-300 font-black uppercase text-[10px]">Nadie tiene repetidas aún</div> : (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         {duplicates.map(dup => (
                                             <div key={dup.id} className="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center shadow-sm">
@@ -358,12 +349,18 @@
                         <div className="fixed inset-0 z-50 flex justify-end">
                             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setIsMenuOpen(false)}></div>
                             <div className="relative w-72 bg-white shadow-2xl h-full flex flex-col p-6 animate-in">
-                                <div className="flex justify-between items-center mb-10"><h2 className="font-black text-xl italic uppercase">Opciones</h2><button onClick={() => setIsMenuOpen(false)} className="p-1.5 bg-gray-50 rounded-full text-gray-400 active:scale-75 transition-transform"><Icon name="x"/></button></div>
+                                <div className="flex justify-between items-center mb-10"><h2 className="font-black text-xl italic uppercase">Configuración</h2><button onClick={() => setIsMenuOpen(false)} className="p-1.5 bg-gray-50 rounded-full text-gray-400"><Icon name="x"/></button></div>
                                 <div className="space-y-4">
-                                    <button onClick={() => { const text = duplicates.map(d => `${d.display} (x${d.extra})`).join(', '); if (text) { navigator.clipboard.writeText(`Mis repetidas 2026: ${text}`); alert("¡Copiado!"); } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] border border-blue-100">Copiar Mis Repes <Icon name="copy" /></button>
-                                    <button onClick={() => { if(window.confirm("¿Reiniciar?")) { if (user && window.FB) { const { getFirestore, doc, setDoc } = window.FB; setStickers({}); const db = getFirestore(); const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'userData', 'stickers'); setDoc(docRef, { collection: {} }); } setIsMenuOpen(false); } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-red-50 text-red-600 font-black uppercase text-[10px] border border-red-100">Borrar Todo <Icon name="trash" /></button>
+                                    <div className="bg-green-50 p-4 rounded-xl border border-green-100 text-center">
+                                        <p className="text-[10px] font-black text-green-700 uppercase mb-1 flex items-center justify-center gap-2"><Icon name="users" className="w-3 h-3"/> Álbum Compartido</p>
+                                        <p className="text-[8px] text-green-600 uppercase">Todos los celulares vinculados ven los mismos datos al instante.</p>
+                                    </div>
+                                    <button onClick={() => { const text = duplicates.map(d => `${d.display} (x${d.extra})`).join(', '); if (text) { navigator.clipboard.writeText(`Repetidas de nuestro grupo: ${text}`); alert("¡Lista copiada!"); } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] border border-blue-100">Copiar Repes Grupal <Icon name="copy" /></button>
+                                    <button onClick={() => { if(window.confirm("¿BORRAR EL ÁLBUM DE TODOS?")) { if (user && window.FB) { const { getFirestore, doc, setDoc } = window.FB; setStickers({}); const db = getFirestore(); const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'album', 'shared'); setDoc(docRef, { collection: {} }); } setIsMenuOpen(false); } }} className="w-full flex items-center justify-between p-4 rounded-xl bg-red-50 text-red-600 font-black uppercase text-[10px] border border-red-100">Reiniciar Grupal <Icon name="trash" /></button>
                                 </div>
-                                <div className="mt-auto text-center font-mono text-[8px] text-gray-300 break-all uppercase tracking-tighter">ID: {user?.uid}</div>
+                                <div className="mt-auto text-center font-mono text-[8px] text-gray-300 break-all uppercase tracking-widest">
+                                    ESTADO: {syncStatus}
+                                </div>
                             </div>
                         </div>
                     )}
