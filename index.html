@@ -54,7 +54,8 @@
                 minus: <path d="M5 12h14"/>,
                 users: <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />,
                 loader: <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />,
-                clipboardList: <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
+                clipboardList: <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />,
+                search: <><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -118,9 +119,11 @@
             const [view, setView] = useState('groups'); 
             const [selectedItem, setSelectedItem] = useState(null);
             const [isMenuOpen, setIsMenuOpen] = useState(false);
+            const [searchQuery, setSearchQuery] = useState('');
 
             const appId = firebaseConfig.projectId;
 
+            // 1. Inicializar Firebase Auth
             useEffect(() => {
                 if (!window.FB) return;
                 const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged } = window.FB;
@@ -140,6 +143,7 @@
                 return () => unsubscribe();
             }, []);
 
+            // 2. Sincronizar Álbum Compartido sin bugs de rebote de estado
             useEffect(() => {
                 if (!user || !window.FB) return;
                 const { getFirestore, doc, onSnapshot } = window.FB;
@@ -147,6 +151,10 @@
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'album', 'shared');
                 
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                    // CRITICO: Ignora la actualización si hay escrituras locales sin confirmar por el servidor
+                    if (docSnap.metadata && docSnap.metadata.hasPendingWrites) {
+                        return;
+                    }
                     if (docSnap.exists()) {
                         setStickers(docSnap.data().collection || {});
                     }
@@ -161,6 +169,7 @@
                 return () => unsubscribe();
             }, [user, appId]);
 
+            // 3. toggleSticker robusto a nivel de claves específicas (evita colisiones concurrentes)
             const toggleSticker = async (category, number, delta) => {
                 if (!user || !window.FB) return;
                 const { getFirestore, doc, setDoc } = window.FB;
@@ -180,7 +189,8 @@
                         nextStickers[key] = newValue;
                     }
 
-                    setDoc(docRef, { collection: nextStickers }, { merge: true })
+                    // Escribimos exclusivamente la clave actualizada usando fusión profunda para evitar machacar otros datos
+                    setDoc(docRef, { collection: { [key]: newValue } }, { merge: true })
                         .then(() => setSyncStatus('live'))
                         .catch(() => setSyncStatus('error'));
 
@@ -188,6 +198,7 @@
                 });
             };
 
+            // Computadoras y Filtros en Tiempo Real
             const stats = useMemo(() => {
                 const totalPossible = 994;
                 const owned = Object.values(stickers).filter(c => c >= 1).length;
@@ -196,6 +207,28 @@
                     owned, totalPossible, remaining: totalPossible - owned
                 };
             }, [stickers]);
+
+            // Filtrado del Buscador
+            const filteredSpecials = useMemo(() => {
+                if (!searchQuery.trim()) return SPECIAL_SECTIONS;
+                const q = searchQuery.toLowerCase().trim();
+                return SPECIAL_SECTIONS.filter(sec => 
+                    sec.name.toLowerCase().includes(q) || 
+                    sec.code.toLowerCase().includes(q)
+                );
+            }, [searchQuery]);
+
+            const filteredGroupsData = useMemo(() => {
+                if (!searchQuery.trim()) return GROUPS_DATA;
+                const q = searchQuery.toLowerCase().trim();
+                return GROUPS_DATA.map(group => {
+                    const matchingTeams = group.teams.filter(team => 
+                        team.name.toLowerCase().includes(q) || 
+                        team.code.toLowerCase().includes(q)
+                    );
+                    return { ...group, teams: matchingTeams };
+                }).filter(group => group.teams.length > 0);
+            }, [searchQuery]);
 
             const missingData = useMemo(() => {
                 const result = { specials: [], teams: [] };
@@ -229,7 +262,7 @@
                         <div className="p-3 flex items-center justify-between max-w-xl mx-auto">
                             <div className="flex items-center gap-3">
                                 {view !== 'groups' && (
-                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full">
+                                    <button onClick={() => setView('groups')} className="p-2 bg-black/5 rounded-full active:scale-90 transition-transform">
                                         <Icon name="arrowLeft" className="text-black" />
                                     </button>
                                 )}
@@ -268,27 +301,55 @@
                         
                         {!loading && view === 'groups' && (
                             <div className="animate-in">
-                                <div className="bg-[#121212] text-white py-1.5 px-6 font-black italic text-xs tracking-widest uppercase mb-1 shadow-sm">ESPECIALES</div>
-                                <div className="px-4 mb-6 space-y-1.5">
-                                    {SPECIAL_SECTIONS.map(section => {
-                                        const ownedInSec = Object.keys(stickers).filter(k => k.startsWith(`${section.id}-`)).length;
-                                        return (
-                                            <button key={section.id} onClick={() => { setSelectedItem({...section, type: 'special'}); setView('detail'); }} className="w-full bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between shadow-sm active:bg-gray-50 transition-colors">
-                                                <div className="flex items-center gap-3"><span className="text-xl">{section.icon}</span><h3 className="font-black text-gray-800 text-xs uppercase italic">{section.name}</h3></div>
-                                                <div className="flex flex-col items-end text-right">
-                                                    <span className="text-[10px] font-black text-gray-600 leading-none">{ownedInSec}/{section.count}</span>
-                                                    <div className="w-16 h-1 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
-                                                        <div className="h-full bg-[#121212]" style={{ width: `${(ownedInSec/section.count)*100}%` }}></div>
-                                                    </div>
-                                                </div>
+                                {/* Buscador de Selecciones y Especiales */}
+                                <div className="p-4 bg-white border-b border-gray-100">
+                                    <div className="relative">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Buscar selección, código o especial (ej: ARG, MÉXICO, FWC)..." 
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#fedd00] focus:bg-white transition-all"
+                                        />
+                                        <div className="absolute left-3.5 top-3 text-gray-400">
+                                            <Icon name="search" className="w-4 h-4" />
+                                        </div>
+                                        {searchQuery && (
+                                            <button 
+                                                onClick={() => setSearchQuery('')}
+                                                className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600"
+                                            >
+                                                <Icon name="x" className="w-4 h-4" />
                                             </button>
-                                        );
-                                    })}
+                                        )}
+                                    </div>
                                 </div>
+
+                                {filteredSpecials.length > 0 && (
+                                    <>
+                                        <div className="bg-[#121212] text-white py-1.5 px-6 font-black italic text-xs tracking-widest uppercase mb-1 shadow-sm">ESPECIALES</div>
+                                        <div className="px-4 mb-6 space-y-1.5">
+                                            {filteredSpecials.map(section => {
+                                                const ownedInSec = Object.keys(stickers).filter(k => k.startsWith(`${section.id}-`)).length;
+                                                return (
+                                                    <button key={section.id} onClick={() => { setSelectedItem({...section, type: 'special'}); setView('detail'); }} className="w-full bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between shadow-sm active:bg-gray-50 transition-colors">
+                                                        <div className="flex items-center gap-3"><span className="text-xl">{section.icon}</span><h3 className="font-black text-gray-800 text-xs uppercase italic">{section.name}</h3></div>
+                                                        <div className="flex flex-col items-end text-right">
+                                                            <span className="text-[10px] font-black text-gray-600 leading-none">{ownedInSec}/{section.count}</span>
+                                                            <div className="w-16 h-1 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
+                                                                <div className="h-full bg-[#121212]" style={{ width: `${(ownedInSec/section.count)*100}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
 
                                 <div className="bg-[#121212] text-white py-1.5 px-6 font-black italic text-xs tracking-widest uppercase mb-3 shadow-sm">SELECCIONES NACIONALES</div>
                                 <div className="px-4 space-y-4">
-                                    {GROUPS_DATA.map(group => (
+                                    {filteredGroupsData.map(group => (
                                         <div key={group.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                             <div className="px-4 py-1.5 flex justify-between items-center text-white font-black italic uppercase text-[10px]" style={{ backgroundColor: GROUP_CONFIG[group.id].color }}>Grupo {group.id}</div>
                                             <div className="divide-y divide-gray-50">
@@ -311,6 +372,11 @@
                                             </div>
                                         </div>
                                     ))}
+                                    {filteredGroupsData.length === 0 && filteredSpecials.length === 0 && (
+                                        <div className="p-12 text-center text-gray-400 font-bold uppercase text-xs">
+                                            No se encontraron países ni especiales con "{searchQuery}"
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -392,7 +458,7 @@
                                                 return (
                                                     <div key={category} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                                                         <div className="text-white px-4 py-1.5 flex justify-between items-center" style={{ backgroundColor: GROUP_CONFIG[group.id].color }}>
-                                                            <div className="flex items-center gap-2"><img src={`https://flagcdn.com/w20/${team.flag}.png`} className="w-4 h-3 object-cover rounded-[1px] border border-white/20" /><span className="text-[9px] font-black uppercase tracking-widest">{team.name}</span></div>
+                                                            <div className="flex items-center gap-2"><img src={`https://flagcdn.com/w20/${team.flag}.png`} className="w-4 h-3 object-cover rounded-[1px] border border-white/20" alt="" /><span className="text-[9px] font-black uppercase tracking-widest">{team.name}</span></div>
                                                             <span className="text-[9px] font-black bg-white/20 px-2 py-0.5 rounded-full">{dupsInCategory.reduce((a,b) => a+b.extra, 0)}</span>
                                                         </div>
                                                         <div className="p-3 grid grid-cols-2 gap-2">
@@ -438,7 +504,7 @@
                                         ))}
                                         {missingData.teams.map(team => (
                                             <div key={team.name} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                                <div className="text-white px-4 py-1.5 flex justify-between items-center" style={{ backgroundColor: GROUP_CONFIG[team.groupId].color }}><div className="flex items-center gap-2"><img src={`https://flagcdn.com/w20/${team.flag}.png`} className="w-4 h-3 object-cover rounded-[1px] border border-white/20" /><span className="text-[9px] font-black uppercase tracking-widest">{team.name}</span></div><span className="text-[9px] font-black bg-black/20 px-2 py-0.5 rounded-full">{team.missing.length} faltan</span></div>
+                                                <div className="text-white px-4 py-1.5 flex justify-between items-center" style={{ backgroundColor: GROUP_CONFIG[team.groupId].color }}><div className="flex items-center gap-2"><img src={`https://flagcdn.com/w20/${team.flag}.png`} className="w-4 h-3 object-cover rounded-[1px] border border-white/20" alt="" /><span className="text-[9px] font-black uppercase tracking-widest">{team.name}</span></div><span className="text-[9px] font-black bg-black/20 px-2 py-0.5 rounded-full">{team.missing.length} faltan</span></div>
                                                 <div className="p-4 flex flex-wrap gap-2 bg-gray-50/50">{team.missing.map(num => <span key={num} className="bg-white border border-gray-200 text-gray-700 font-black text-[11px] px-2.5 py-1 rounded-lg shadow-sm">{team.code} {num}</span>)}</div>
                                             </div>
                                         ))}
